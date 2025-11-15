@@ -43,15 +43,15 @@ jobs:
 
       - name: Execute schema.sql
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          if [ -z "$SUPABASE_DB_URL" ]; then
+          if [ -z "$DATABASE_URL" ]; then
             echo "Error: SUPABASE_DB_URL secret is not set"
             exit 1
           fi
 
           echo "Executing database/schema.sql..."
-          psql "$SUPABASE_DB_URL" -f database/schema.sql
+          psql "${DATABASE_URL}" -f database/schema.sql
 
           echo "Schema deployment completed successfully!"
 ```
