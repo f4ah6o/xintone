@@ -16,7 +16,8 @@ bucket = "./public"
 # - KINTONE_DOMAIN (デフォルトのドメイン、アプリごとに上書き可能)
 # - KINTONE_APP_ID (デフォルトのアプリID、アプリごとに上書き可能)
 
-[[kv_namespaces]]
-binding = "CACHE"
-id = ""
-preview_id = ""
+# KV namespace は必要になったタイミングで設定する
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "<production-id>"
+# preview_id = "<preview-id>"
