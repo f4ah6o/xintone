@@ -1,14 +1,11 @@
 name: Deploy Supabase Schema
 
 on:
-  # schema.sqlが変更されたときに自動実行
   push:
     branches:
       - main
     paths:
       - 'database/schema.sql'
-
-  # 手動実行も可能
   workflow_dispatch:
 
 jobs:
@@ -16,24 +13,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
           sudo apt-get install -y postgresql-client
-      
+
       - name: Execute schema.sql
         env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then
+          if [ -z "${SUPABASE_DB_URL}" ]; then
             echo "Error: SUPABASE_DB_URL secret is not set"
             exit 1
           fi
-      
-          echo "Executing database/schema.sql..."
-          psql "${DATABASE_URL}" -f database/schema.sql
-      
+
+          # Prevent accidental leakage of the raw database URL into Action logs
+          echo "::add-mask::${SUPABASE_DB_URL}"
+
+          echo "Executing database/schema.sql via psql (IPv4 enforced)..."
+          psql -4 "${SUPABASE_DB_URL}" --set ON_ERROR_STOP=1 -f database/schema.sql
+
           echo "Schema deployment completed successfully!"

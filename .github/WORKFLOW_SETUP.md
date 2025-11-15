@@ -36,10 +36,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
 
       - name: Execute schema.sql
         env:
@@ -50,8 +50,9 @@ jobs:
             exit 1
           fi
 
-          echo "Executing database/schema.sql..."
-          supabase db execute --db-url "$SUPABASE_DB_URL" --file database/schema.sql
+          echo "::add-mask::$SUPABASE_DB_URL"
+          echo "Executing database/schema.sql via psql (IPv4 enforced)..."
+          psql -4 "$SUPABASE_DB_URL" --set ON_ERROR_STOP=1 -f database/schema.sql
 
           echo "Schema deployment completed successfully!"
 ```
