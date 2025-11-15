@@ -3,282 +3,214 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>xintone - kintone + Supabase + htmx</title>
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <title>ログイン - xintone</title>
+  <link rel="stylesheet" href="/styles.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: #f5f5f5;
-      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
     }
 
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      padding: 30px;
+    .login-container {
+      max-width: 400px;
+      width: 100%;
+      padding: 40px;
+      background: var(--white);
+      border-radius: 12px;
+      box-shadow: var(--shadow-lg);
     }
 
-    h1 {
-      color: #333;
-      margin-bottom: 10px;
-    }
-
-    .subtitle {
-      color: #666;
+    .logo {
+      text-align: center;
       margin-bottom: 30px;
     }
 
-    .auth-section {
-      margin-bottom: 30px;
-      padding: 20px;
-      background: #f9f9f9;
-      border-radius: 6px;
+    .logo h1 {
+      font-size: 32px;
+      color: var(--primary-color);
+      margin-bottom: 5px;
     }
 
-    .auth-form {
+    .logo p {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-actions {
       display: flex;
       gap: 10px;
-      margin-bottom: 15px;
     }
 
-    input {
-      padding: 10px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-
-    input[type="email"], input[type="password"] {
-      flex: 1;
-    }
-
-    button {
-      padding: 10px 20px;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s;
-    }
-
-    button:hover {
-      background: #0056b3;
-    }
-
-    button.secondary {
-      background: #6c757d;
-    }
-
-    button.secondary:hover {
-      background: #545b62;
-    }
-
-    .user-info {
-      padding: 15px;
-      background: #d4edda;
-      border: 1px solid #c3e6cb;
-      border-radius: 4px;
-      margin-bottom: 20px;
-      display: none;
-    }
-
-    .records-section {
-      display: none;
-    }
-
-    .record-list {
-      margin-top: 20px;
-    }
-
-    .record-item {
-      padding: 15px;
-      background: #f8f9fa;
-      border: 1px solid #dee2e6;
-      border-radius: 4px;
-      margin-bottom: 10px;
-    }
-
-    .record-item:hover {
-      background: #e9ecef;
-    }
-
-    .loading {
+    .divider {
       text-align: center;
-      padding: 20px;
-      color: #666;
-    }
-
-    .error {
-      padding: 15px;
-      background: #f8d7da;
-      border: 1px solid #f5c6cb;
-      border-radius: 4px;
-      color: #721c24;
-      margin-top: 10px;
+      margin: 20px 0;
+      color: var(--text-muted);
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>xintone</h1>
-    <p class="subtitle">kintone + Supabase + Cloudflare Workers + htmx + Hono</p>
-
-    <!-- 認証セクション -->
-    <div class="auth-section">
-      <h2>認証</h2>
-      <div id="login-form">
-        <div class="auth-form">
-          <input type="email" id="email" placeholder="メールアドレス" required>
-          <input type="password" id="password" placeholder="パスワード" required>
-          <button onclick="handleLogin()">ログイン</button>
-          <button class="secondary" onclick="handleSignup()">サインアップ</button>
-        </div>
-      </div>
-      <div id="user-info" class="user-info">
-        <p>ログイン中: <span id="user-email"></span></p>
-        <button class="secondary" onclick="handleLogout()">ログアウト</button>
-      </div>
+  <div class="login-container">
+    <div class="logo">
+      <h1>xintone</h1>
+      <p>kintone + Supabase + htmx</p>
     </div>
 
-    <!-- レコード一覧セクション -->
-    <div id="records-section" class="records-section">
-      <h2>kintone レコード</h2>
-      <button
-        hx-get="/api/records"
-        hx-target="#record-list"
-        hx-swap="innerHTML"
-        onclick="addAuthHeader(this)">
-        レコード取得
+    <div id="error-message"></div>
+
+    <form id="login-form" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input type="email" id="email" class="form-control" placeholder="user@example.com" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">パスワード</label>
+        <input type="password" id="password" class="form-control" placeholder="パスワード" required>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-block">ログイン</button>
+      </div>
+
+      <div class="divider">または</div>
+
+      <button type="button" class="btn btn-secondary btn-block" onclick="showSignupForm()">
+        新規登録
       </button>
+    </form>
 
-      <div id="record-list" class="record-list">
-        <!-- レコード一覧がここに表示されます -->
+    <form id="signup-form" style="display: none;" onsubmit="handleSignup(event)">
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input type="email" id="signup-email" class="form-control" placeholder="user@example.com" required>
       </div>
-    </div>
+
+      <div class="form-group">
+        <label class="form-label">パスワード</label>
+        <input type="password" id="signup-password" class="form-control" placeholder="パスワード（6文字以上）" required minlength="6">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">パスワード（確認）</label>
+        <input type="password" id="signup-password-confirm" class="form-control" placeholder="パスワード（確認）" required minlength="6">
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary btn-block">登録</button>
+      </div>
+
+      <div class="divider">または</div>
+
+      <button type="button" class="btn btn-secondary btn-block" onclick="showLoginForm()">
+        ログインに戻る
+      </button>
+    </form>
   </div>
 
+  <script src="/common.js"></script>
   <script>
-    // Supabase クライアント初期化
-    // 実際の値は環境変数から取得してください
-    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    // ページ読み込み時の初期化
+    window.addEventListener('DOMContentLoaded', async () => {
+      initSupabase();
 
-    let supabaseClient;
-    let currentToken = null;
+      // すでにログイン済みの場合はアプリ一覧へリダイレクト
+      const session = await checkSession();
+      if (session) {
+        window.location.href = '/apps.html';
+      }
+    });
 
-    // Supabase クライアントを初期化
-    if (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
-      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      checkSession();
+    // ログインフォーム表示
+    function showLoginForm() {
+      document.getElementById('login-form').style.display = 'block';
+      document.getElementById('signup-form').style.display = 'none';
+      clearError();
     }
 
-    // セッションチェック
-    async function checkSession() {
-      if (!supabaseClient) return;
-
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      if (session) {
-        currentToken = session.access_token;
-        showUserInfo(session.user);
-      }
+    // サインアップフォーム表示
+    function showSignupForm() {
+      document.getElementById('login-form').style.display = 'none';
+      document.getElementById('signup-form').style.display = 'block';
+      clearError();
     }
 
     // ログイン処理
-    async function handleLogin() {
-      if (!supabaseClient) {
-        alert('Supabaseの設定が必要です');
-        return;
-      }
+    async function handleLogin(event) {
+      event.preventDefault();
+      clearError();
 
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
 
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        alert('ログインエラー: ' + error.message);
-      } else {
-        currentToken = data.session.access_token;
-        showUserInfo(data.user);
+      try {
+        await login(email, password);
+        window.location.href = '/apps.html';
+      } catch (error) {
+        showErrorMessage('ログインに失敗しました: ' + error.message);
       }
     }
 
     // サインアップ処理
-    async function handleSignup() {
-      if (!supabaseClient) {
-        alert('Supabaseの設定が必要です');
+    async function handleSignup(event) {
+      event.preventDefault();
+      clearError();
+
+      const email = document.getElementById('signup-email').value;
+      const password = document.getElementById('signup-password').value;
+      const passwordConfirm = document.getElementById('signup-password-confirm').value;
+
+      if (password !== passwordConfirm) {
+        showErrorMessage('パスワードが一致しません');
         return;
       }
 
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
+      try {
+        if (!supabaseClient) {
+          throw new Error('Supabase が初期化されていません');
+        }
 
-      const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-      });
+        const { data, error } = await supabaseClient.auth.signUp({
+          email,
+          password,
+        });
 
-      if (error) {
-        alert('サインアップエラー: ' + error.message);
-      } else {
-        alert('サインアップ成功! メールを確認してください。');
+        if (error) throw error;
+
+        showSuccessMessage('登録成功！メールを確認して認証を完了してください。');
+
+        // 3秒後にログインフォームに戻る
+        setTimeout(() => {
+          showLoginForm();
+        }, 3000);
+      } catch (error) {
+        showErrorMessage('登録に失敗しました: ' + error.message);
       }
     }
 
-    // ログアウト処理
-    async function handleLogout() {
-      if (!supabaseClient) return;
-
-      await supabaseClient.auth.signOut();
-      currentToken = null;
-      hideUserInfo();
+    // エラーメッセージ表示
+    function showErrorMessage(message) {
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.innerHTML = `<div class="error">${message}</div>`;
     }
 
-    // ユーザー情報表示
-    function showUserInfo(user) {
-      document.getElementById('login-form').style.display = 'none';
-      document.getElementById('user-info').style.display = 'block';
-      document.getElementById('user-email').textContent = user.email;
-      document.getElementById('records-section').style.display = 'block';
+    // 成功メッセージ表示
+    function showSuccessMessage(message) {
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.innerHTML = `<div class="success">${message}</div>`;
     }
 
-    // ユーザー情報非表示
-    function hideUserInfo() {
-      document.getElementById('login-form').style.display = 'block';
-      document.getElementById('user-info').style.display = 'none';
-      document.getElementById('records-section').style.display = 'none';
+    // エラーメッセージクリア
+    function clearError() {
+      document.getElementById('error-message').innerHTML = '';
     }
-
-    // htmx リクエストに認証ヘッダーを追加
-    function addAuthHeader(element) {
-      if (currentToken) {
-        element.setAttribute('hx-headers', JSON.stringify({
-          'Authorization': 'Bearer ' + currentToken
-        }));
-      }
-    }
-
-    // htmx のグローバル設定
-    document.body.addEventListener('htmx:configRequest', (event) => {
-      if (currentToken) {
-        event.detail.headers['Authorization'] = 'Bearer ' + currentToken;
-      }
-    });
   </script>
 </body>
 </html>

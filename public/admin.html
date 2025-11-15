@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理者画面 - xintone</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .tab-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    .tab {
+      padding: 10px 20px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      color: var(--text-muted);
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      color: var(--text-color);
+    }
+
+    .tab.active {
+      color: var(--primary-color);
+      border-bottom-color: var(--primary-color);
+      font-weight: 600;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .app-list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      background: var(--white);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+
+    .app-list-item:hover {
+      background: var(--light-bg);
+    }
+
+    .user-list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      background: var(--white);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <h1>xintone - 管理者画面</h1>
+      <div class="header-nav">
+        <a href="/apps.html" class="btn btn-sm btn-secondary">← アプリ一覧</a>
+        <div class="user-info">
+          <span class="user-email" id="user-email"></span>
+          <span class="admin-badge">管理者</span>
+          <button class="btn btn-sm btn-secondary" onclick="logout()">ログアウト</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- タブ -->
+    <div class="tab-container">
+      <button class="tab active" onclick="switchTab('apps')">アプリ管理</button>
+      <button class="tab" onclick="switchTab('users')">ユーザー管理</button>
+    </div>
+
+    <!-- アプリ管理タブ -->
+    <div id="apps-tab" class="tab-content active">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">アプリ一覧</h2>
+          <div class="flex-gap">
+            <button class="btn btn-success btn-sm" onclick="showAppModal()">
+              ➕ アプリ追加
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="loadApps()">
+              🔄 更新
+            </button>
+          </div>
+        </div>
+
+        <div id="apps-container">
+          <div class="loading">読み込み中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ユーザー管理タブ -->
+    <div id="users-tab" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">ユーザー一覧</h2>
+          <button class="btn btn-primary btn-sm" onclick="loadUsers()">
+            🔄 更新
+          </button>
+        </div>
+
+        <div id="users-container">
+          <div class="loading">読み込み中...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アプリ編集モーダル -->
+  <div id="app-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="app-modal-title">アプリ追加</h3>
+        <button class="modal-close" onclick="closeAppModal()">✕</button>
+      </div>
+      <form id="app-form" onsubmit="saveApp(event)">
+        <div class="form-group">
+          <label class="form-label">アプリ名 *</label>
+          <input type="text" id="app-name" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">説明</label>
+          <textarea id="app-description" class="form-control"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">kintone ドメイン *</label>
+          <input type="text" id="app-domain" class="form-control" placeholder="your-domain.cybozu.com" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">kintone アプリ ID *</label>
+          <input type="text" id="app-kintone-id" class="form-control" placeholder="1" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">アイコン (絵文字)</label>
+          <input type="text" id="app-icon" class="form-control" placeholder="📋" maxlength="2">
+        </div>
+
+        <div class="form-group">
+          <label class="form-check">
+            <input type="checkbox" id="app-active" checked>
+            アクティブ
+          </label>
+        </div>
+
+        <div class="flex-gap">
+          <button type="submit" class="btn btn-primary">保存</button>
+          <button type="button" class="btn btn-secondary" onclick="closeAppModal()">キャンセル</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- アクセス権限管理モーダル -->
+  <div id="access-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">アクセス権限管理</h3>
+        <button class="modal-close" onclick="closeAccessModal()">✕</button>
+      </div>
+      <div id="access-modal-body">
+        <!-- 権限管理UIがここに表示されます -->
+      </div>
+    </div>
+  </div>
+
+  <script src="/common.js"></script>
+  <script>
+    let apps = [];
+    let users = [];
+    let currentEditingAppId = null;
+
+    // ページ読み込み時の初期化
+    window.addEventListener('DOMContentLoaded', async () => {
+      initSupabase();
+
+      // ログインチェック
+      const session = await checkSession();
+      if (!session) {
+        window.location.href = '/';
+        return;
+      }
+
+      // 管理者チェック
+      if (!isAdmin()) {
+        alert('管理者権限が必要です');
+        window.location.href = '/apps.html';
+        return;
+      }
+
+      // ユーザー情報表示
+      document.getElementById('user-email').textContent = currentUser.email;
+
+      // アプリ一覧を読み込む
+      await loadApps();
+    });
+
+    // タブ切り替え
+    function switchTab(tabName) {
+      // すべてのタブを非アクティブに
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+      // 選択したタブをアクティブに
+      event.target.classList.add('active');
+      document.getElementById(tabName + '-tab').classList.add('active');
+
+      // タブに応じてデータを読み込む
+      if (tabName === 'users' && users.length === 0) {
+        loadUsers();
+      }
+    }
+
+    // アプリ一覧を読み込む
+    async function loadApps() {
+      try {
+        showLoading('apps-container');
+
+        const { data, error } = await supabaseClient
+          .from('kintone_apps')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        apps = data || [];
+        renderApps();
+      } catch (error) {
+        console.error('Error loading apps:', error);
+        showError('apps-container', 'アプリの読み込みに失敗しました: ' + error.message);
+      }
+    }
+
+    // アプリ一覧を表示
+    function renderApps() {
+      const container = document.getElementById('apps-container');
+
+      if (apps.length === 0) {
+        container.innerHTML = `
+          <div class="text-center text-muted" style="padding: 40px;">
+            <p>アプリがありません</p>
+          </div>
+        `;
+        return;
+      }
+
+      const html = apps.map(app => `
+        <div class="app-list-item">
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+              <span style="font-size: 24px;">${app.icon || '📋'}</span>
+              <h3 style="margin: 0;">${app.name}</h3>
+              ${app.is_active ? '<span class="badge badge-success">アクティブ</span>' : '<span class="badge badge-danger">非アクティブ</span>'}
+            </div>
+            <p class="text-muted" style="margin: 5px 0;">${app.description || ''}</p>
+            <div style="display: flex; gap: 15px; font-size: 12px; color: var(--text-muted);">
+              <span>ドメイン: ${app.kintone_domain}</span>
+              <span>App ID: ${app.kintone_app_id}</span>
+              <span>作成日: ${formatDate(app.created_at)}</span>
+            </div>
+          </div>
+          <div class="flex-gap">
+            <button class="btn btn-sm btn-primary" onclick="manageAccess('${app.id}')">
+              👥 権限管理
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="editApp('${app.id}')">
+              編集
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="deleteApp('${app.id}')">
+              削除
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      container.innerHTML = html;
+    }
+
+    // アプリモーダル表示
+    function showAppModal(appId = null) {
+      currentEditingAppId = appId;
+
+      if (appId) {
+        // 編集モード
+        const app = apps.find(a => a.id === appId);
+        if (!app) return;
+
+        document.getElementById('app-modal-title').textContent = 'アプリ編集';
+        document.getElementById('app-name').value = app.name;
+        document.getElementById('app-description').value = app.description || '';
+        document.getElementById('app-domain').value = app.kintone_domain;
+        document.getElementById('app-kintone-id').value = app.kintone_app_id;
+        document.getElementById('app-icon').value = app.icon || '';
+        document.getElementById('app-active').checked = app.is_active;
+      } else {
+        // 新規作成モード
+        document.getElementById('app-modal-title').textContent = 'アプリ追加';
+        document.getElementById('app-form').reset();
+        document.getElementById('app-active').checked = true;
+      }
+
+      document.getElementById('app-modal').classList.add('active');
+    }
+
+    // アプリモーダルを閉じる
+    function closeAppModal() {
+      document.getElementById('app-modal').classList.remove('active');
+      currentEditingAppId = null;
+    }
+
+    // アプリ編集
+    function editApp(appId) {
+      showAppModal(appId);
+    }
+
+    // アプリ保存
+    async function saveApp(event) {
+      event.preventDefault();
+
+      const appData = {
+        name: document.getElementById('app-name').value,
+        description: document.getElementById('app-description').value,
+        kintone_domain: document.getElementById('app-domain').value,
+        kintone_app_id: document.getElementById('app-kintone-id').value,
+        icon: document.getElementById('app-icon').value,
+        is_active: document.getElementById('app-active').checked,
+      };
+
+      try {
+        if (currentEditingAppId) {
+          // 更新
+          const { error } = await supabaseClient
+            .from('kintone_apps')
+            .update(appData)
+            .eq('id', currentEditingAppId);
+
+          if (error) throw error;
+          alert('アプリを更新しました');
+        } else {
+          // 新規作成
+          appData.created_by = currentUser.id;
+
+          const { error } = await supabaseClient
+            .from('kintone_apps')
+            .insert([appData]);
+
+          if (error) throw error;
+          alert('アプリを追加しました');
+        }
+
+        closeAppModal();
+        await loadApps();
+      } catch (error) {
+        console.error('Error saving app:', error);
+        alert('保存に失敗しました: ' + error.message);
+      }
+    }
+
+    // アプリ削除
+    async function deleteApp(appId) {
+      if (!confirm('このアプリを削除しますか？関連する権限設定もすべて削除されます。')) {
+        return;
+      }
+
+      try {
+        const { error } = await supabaseClient
+          .from('kintone_apps')
+          .delete()
+          .eq('id', appId);
+
+        if (error) throw error;
+
+        alert('アプリを削除しました');
+        await loadApps();
+      } catch (error) {
+        console.error('Error deleting app:', error);
+        alert('削除に失敗しました: ' + error.message);
+      }
+    }
+
+    // アクセス権限管理
+    async function manageAccess(appId) {
+      const app = apps.find(a => a.id === appId);
+      if (!app) return;
+
+      try {
+        // すべてのユーザーを取得
+        const { data: profilesData, error: profilesError } = await supabaseClient
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (profilesError) throw profilesError;
+
+        // このアプリの権限設定を取得
+        const { data: accessData, error: accessError } = await supabaseClient
+          .from('user_app_access')
+          .select('*')
+          .eq('app_id', appId);
+
+        if (accessError) throw accessError;
+
+        // アクセス権限マップを作成
+        const accessMap = {};
+        accessData.forEach(access => {
+          accessMap[access.user_id] = access;
+        });
+
+        // UIを生成
+        const html = `
+          <h4 style="margin-bottom: 20px;">${app.name} のアクセス権限</h4>
+          <div style="max-height: 60vh; overflow-y: auto;">
+            ${profilesData.map(profile => {
+              const access = accessMap[profile.id];
+              const hasAccess = !!access;
+
+              return `
+                <div class="user-list-item">
+                  <div>
+                    <div>${profile.email}</div>
+                    <div class="text-muted" style="font-size: 12px;">
+                      ${profile.role === 'admin' ? '管理者' : 'ユーザー'}
+                    </div>
+                  </div>
+                  <div>
+                    ${hasAccess ? `
+                      <div class="flex-gap" style="margin-bottom: 10px;">
+                        <label class="form-check">
+                          <input type="checkbox" ${access.can_read ? 'checked' : ''}
+                            onchange="updateAccess('${appId}', '${profile.id}', 'can_read', this.checked)">
+                          参照
+                        </label>
+                        <label class="form-check">
+                          <input type="checkbox" ${access.can_write ? 'checked' : ''}
+                            onchange="updateAccess('${appId}', '${profile.id}', 'can_write', this.checked)">
+                          編集
+                        </label>
+                        <label class="form-check">
+                          <input type="checkbox" ${access.can_delete ? 'checked' : ''}
+                            onchange="updateAccess('${appId}', '${profile.id}', 'can_delete', this.checked)">
+                          削除
+                        </label>
+                      </div>
+                      <div class="form-group" style="margin-bottom: 10px;">
+                        <input type="text" class="form-control" placeholder="kintone API トークン"
+                          value="${access.api_token || ''}"
+                          onchange="updateApiToken('${appId}', '${profile.id}', this.value)">
+                      </div>
+                      <button class="btn btn-sm btn-danger" onclick="revokeAccess('${appId}', '${profile.id}')">
+                        アクセス削除
+                      </button>
+                    ` : `
+                      <button class="btn btn-sm btn-success" onclick="grantAccess('${appId}', '${profile.id}')">
+                        アクセス許可
+                      </button>
+                    `}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <div class="mt-2">
+            <button class="btn btn-secondary" onclick="closeAccessModal()">閉じる</button>
+          </div>
+        `;
+
+        document.getElementById('access-modal-body').innerHTML = html;
+        document.getElementById('access-modal').classList.add('active');
+      } catch (error) {
+        console.error('Error loading access:', error);
+        alert('アクセス権限の読み込みに失敗しました: ' + error.message);
+      }
+    }
+
+    // アクセス権限を付与
+    async function grantAccess(appId, userId) {
+      try {
+        const { error } = await supabaseClient
+          .from('user_app_access')
+          .insert([{
+            user_id: userId,
+            app_id: appId,
+            api_token: '',
+            can_read: true,
+            can_write: false,
+            can_delete: false,
+          }]);
+
+        if (error) throw error;
+
+        await manageAccess(appId);
+      } catch (error) {
+        console.error('Error granting access:', error);
+        alert('権限の付与に失敗しました: ' + error.message);
+      }
+    }
+
+    // アクセス権限を削除
+    async function revokeAccess(appId, userId) {
+      if (!confirm('このユーザーのアクセス権限を削除しますか？')) {
+        return;
+      }
+
+      try {
+        const { error } = await supabaseClient
+          .from('user_app_access')
+          .delete()
+          .eq('app_id', appId)
+          .eq('user_id', userId);
+
+        if (error) throw error;
+
+        await manageAccess(appId);
+      } catch (error) {
+        console.error('Error revoking access:', error);
+        alert('権限の削除に失敗しました: ' + error.message);
+      }
+    }
+
+    // アクセス権限を更新
+    async function updateAccess(appId, userId, permission, value) {
+      try {
+        const updateData = {};
+        updateData[permission] = value;
+
+        const { error } = await supabaseClient
+          .from('user_app_access')
+          .update(updateData)
+          .eq('app_id', appId)
+          .eq('user_id', userId);
+
+        if (error) throw error;
+      } catch (error) {
+        console.error('Error updating access:', error);
+        alert('権限の更新に失敗しました: ' + error.message);
+      }
+    }
+
+    // APIトークンを更新
+    async function updateApiToken(appId, userId, token) {
+      try {
+        const { error } = await supabaseClient
+          .from('user_app_access')
+          .update({ api_token: token })
+          .eq('app_id', appId)
+          .eq('user_id', userId);
+
+        if (error) throw error;
+      } catch (error) {
+        console.error('Error updating token:', error);
+        alert('トークンの更新に失敗しました: ' + error.message);
+      }
+    }
+
+    // アクセス権限モーダルを閉じる
+    function closeAccessModal() {
+      document.getElementById('access-modal').classList.remove('active');
+    }
+
+    // ユーザー一覧を読み込む
+    async function loadUsers() {
+      try {
+        showLoading('users-container');
+
+        const { data, error } = await supabaseClient
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        users = data || [];
+        renderUsers();
+      } catch (error) {
+        console.error('Error loading users:', error);
+        showError('users-container', 'ユーザーの読み込みに失敗しました: ' + error.message);
+      }
+    }
+
+    // ユーザー一覧を表示
+    function renderUsers() {
+      const container = document.getElementById('users-container');
+
+      if (users.length === 0) {
+        container.innerHTML = `
+          <div class="text-center text-muted" style="padding: 40px;">
+            <p>ユーザーがいません</p>
+          </div>
+        `;
+        return;
+      }
+
+      const html = users.map(user => `
+        <div class="user-list-item">
+          <div>
+            <div style="font-weight: 600;">${user.email}</div>
+            <div class="text-muted" style="font-size: 12px;">
+              登録日: ${formatDate(user.created_at)}
+            </div>
+          </div>
+          <div class="flex-gap">
+            ${user.role === 'admin' ?
+              '<span class="badge badge-warning">管理者</span>' :
+              '<span class="badge badge-success">ユーザー</span>'
+            }
+            ${user.id !== currentUser.id ? `
+              <button class="btn btn-sm btn-secondary" onclick="toggleUserRole('${user.id}', '${user.role}')">
+                ${user.role === 'admin' ? 'ユーザーに変更' : '管理者に変更'}
+              </button>
+            ` : '<span class="text-muted" style="font-size: 12px;">(自分)</span>'}
+          </div>
+        </div>
+      `).join('');
+
+      container.innerHTML = html;
+    }
+
+    // ユーザーロールを切り替え
+    async function toggleUserRole(userId, currentRole) {
+      const newRole = currentRole === 'admin' ? 'user' : 'admin';
+
+      if (!confirm(`このユーザーを${newRole === 'admin' ? '管理者' : '一般ユーザー'}に変更しますか？`)) {
+        return;
+      }
+
+      try {
+        const { error } = await supabaseClient
+          .from('profiles')
+          .update({ role: newRole })
+          .eq('id', userId);
+
+        if (error) throw error;
+
+        alert('ユーザーロールを変更しました');
+        await loadUsers();
+      } catch (error) {
+        console.error('Error updating role:', error);
+        alert('ロールの変更に失敗しました: ' + error.message);
+      }
+    }
+
+    // モーダル外クリックで閉じる
+    document.getElementById('app-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'app-modal') {
+        closeAppModal();
+      }
+    });
+
+    document.getElementById('access-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'access-modal') {
+        closeAccessModal();
+      }
+    });
+  </script>
+</body>
+</html>
