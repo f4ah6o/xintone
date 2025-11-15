@@ -85,9 +85,25 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
 
 ### 4. データベースの初期化
 
+以下のいずれかの方法でデータベースを初期化できます:
+
+#### 方法1: GitHub Workflow（推奨）
+
+1. GitHub リポジトリの Settings → Secrets and variables → Actions に移動
+2. 以下のシークレットを追加:
+   - `SUPABASE_DB_URL`: データベース接続URL
+     - Supabase プロジェクトの Settings → Database → Connection string → URI から取得
+     - 形式: `postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres`
+     - `[YOUR-PASSWORD]` を実際のデータベースパスワードに置き換えてください
+
+3. GitHub Actions タブから「Deploy Supabase Schema」ワークフローを手動実行
+   - または、`database/schema.sql` を変更して main ブランチにプッシュすると自動実行されます
+
+#### 方法2: 手動実行（SQL Editor）
+
 Supabase の SQL Editor で `database/schema.sql` の内容を実行してください。
 
-これにより以下のテーブルが作成されます:
+いずれの方法でも、以下のテーブルが作成されます:
 - `profiles`: ユーザープロファイル（ロール管理）
 - `kintone_apps`: kintone アプリ設定
 - `user_app_access`: ユーザーのアプリアクセス権限
