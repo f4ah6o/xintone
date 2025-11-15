@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アプリ一覧 - xintone</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <h1>xintone</h1>
+      <div class="header-nav">
+        <div class="user-info" id="user-info">
+          <span class="user-email" id="user-email"></span>
+          <span id="admin-badge" style="display: none;" class="admin-badge">管理者</span>
+          <button class="btn btn-sm btn-secondary" onclick="logout()">ログアウト</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- 管理者リンク -->
+    <div id="admin-link" style="display: none;" class="mb-2">
+      <a href="/admin.html" class="btn btn-warning">管理者画面</a>
+    </div>
+
+    <!-- アプリ一覧 -->
+    <div class="card">
+      <div class="card-header">
+        <h2 class="card-title">アプリ一覧</h2>
+        <button class="btn btn-primary btn-sm" onclick="loadApps()">
+          更新
+        </button>
+      </div>
+
+      <div id="apps-container">
+        <div class="loading">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/common.js"></script>
+  <script>
+    let userApps = [];
+
+    // ページ読み込み時の初期化
+    window.addEventListener('DOMContentLoaded', async () => {
+      initSupabase();
+
+      // ログインチェック
+      const session = await checkSession();
+      if (!session) {
+        window.location.href = '/';
+        return;
+      }
+
+      // ユーザー情報表示
+      displayUserInfo();
+
+      // アプリ一覧を読み込む
+      await loadApps();
+    });
+
+    // ユーザー情報表示
+    function displayUserInfo() {
+      if (currentUser) {
+        document.getElementById('user-email').textContent = currentUser.email;
+
+        if (isAdmin()) {
+          document.getElementById('admin-badge').style.display = 'inline-block';
+          document.getElementById('admin-link').style.display = 'block';
+        }
+      }
+    }
+
+    // アプリ一覧を読み込む
+    async function loadApps() {
+      try {
+        showLoading('apps-container');
+
+        if (!supabaseClient) {
+          throw new Error('Supabase が初期化されていません');
+        }
+
+        // ユーザーがアクセスできるアプリを取得
+        const { data: accessData, error: accessError } = await supabaseClient
+          .from('user_app_access')
+          .select(`
+            *,
+            kintone_apps (*)
+          `)
+          .eq('user_id', currentUser.id);
+
+        if (accessError) throw accessError;
+
+        userApps = accessData || [];
+
+        if (userApps.length === 0) {
+          document.getElementById('apps-container').innerHTML = `
+            <div class="text-center text-muted" style="padding: 40px;">
+              <p>アクセスできるアプリがありません</p>
+              <p style="margin-top: 10px; font-size: 14px;">管理者にアクセス権限を依頼してください</p>
+            </div>
+          `;
+          return;
+        }
+
+        // アプリカード表示
+        renderApps();
+      } catch (error) {
+        console.error('Error loading apps:', error);
+        showError('apps-container', 'アプリの読み込みに失敗しました: ' + error.message);
+      }
+    }
+
+    // アプリカードを表示
+    function renderApps() {
+      const container = document.getElementById('apps-container');
+
+      const html = `
+        <div class="grid grid-3">
+          ${userApps.map(access => {
+            const app = access.kintone_apps;
+            const permissions = [];
+            if (access.can_read) permissions.push('参照');
+            if (access.can_write) permissions.push('編集');
+            if (access.can_delete) permissions.push('削除');
+
+            return `
+              <div class="app-card" onclick="openApp('${app.id}', '${access.api_token}')">
+                <div class="app-card-header">
+                  <div class="app-icon">${app.icon || '📋'}</div>
+                  <div class="app-info">
+                    <h3>${app.name}</h3>
+                    <p>${app.description || ''}</p>
+                  </div>
+                </div>
+                <div class="app-meta">
+                  <span>🔑 ${permissions.join(', ')}</span>
+                </div>
+                <div class="app-meta">
+                  <span>📱 App ID: ${app.kintone_app_id}</span>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    // アプリを開く
+    function openApp(appId, apiToken) {
+      // アプリIDとAPIトークンをセッションストレージに保存
+      sessionStorage.setItem('currentAppId', appId);
+      sessionStorage.setItem('currentApiToken', apiToken);
+
+      // レコード一覧ページへ遷移
+      window.location.href = '/records.html';
+    }
+  </script>
+</body>
+</html>

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { authMiddleware, optionalAuthMiddleware } from './middleware/auth';
+import { adminMiddleware } from './middleware/admin';
 import { KintoneService } from './services/kintone';
 import type { Env, AuthUser } from './types';
 
@@ -15,11 +16,8 @@ const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 app.use('*', logger());
 app.use('*', cors());
 
-// 静的ファイル配信（ルートパス）
-app.get('/', async (c) => {
-  const html = await fetch('https://raw.githubusercontent.com/yourusername/xintone/main/public/index.html');
-  return c.html(await html.text());
-});
+// 静的ファイル配信は実際の環境では Cloudflare Pages や別の静的ホスティングを使用することを推奨
+// 開発時は wrangler dev で public フォルダが自動的に配信されます
 
 // ヘルスチェック
 app.get('/health', (c) => {
@@ -31,7 +29,7 @@ const api = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 /**
  * レコード一覧取得
- * GET /api/records
+ * GET /api/records?app_id=xxx
  */
 api.get('/records', authMiddleware, async (c) => {
   try {
@@ -41,18 +39,20 @@ api.get('/records', authMiddleware, async (c) => {
     }
 
     // クエリパラメータから検索条件を取得
+    const appId = c.req.query('app_id');
     const query = c.req.query('query');
     const fields = c.req.query('fields')?.split(',');
 
-    // kintone API トークンは実際には Supabase のユーザーメタデータや
-    // 別の安全なストレージから取得する必要があります
+    // kintone API トークンをヘッダーから取得
     const apiToken = c.req.header('X-Kintone-API-Token') || '';
 
     if (!apiToken) {
       return c.json({ error: 'kintone API token is required' }, 400);
     }
 
-    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, c.env.KINTONE_APP_ID);
+    // app_idが指定されている場合は使用、なければ環境変数から
+    const kintoneAppId = appId || c.env.KINTONE_APP_ID;
+    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, kintoneAppId);
     const result = await kintone.getRecords(apiToken, query, fields);
 
     // htmx 用の HTML レスポンス
@@ -86,7 +86,7 @@ api.get('/records', authMiddleware, async (c) => {
 
 /**
  * 単一レコード取得
- * GET /api/records/:id
+ * GET /api/records/:id?app_id=xxx
  */
 api.get('/records/:id', authMiddleware, async (c) => {
   try {
@@ -96,13 +96,15 @@ api.get('/records/:id', authMiddleware, async (c) => {
     }
 
     const recordId = c.req.param('id');
+    const appId = c.req.query('app_id');
     const apiToken = c.req.header('X-Kintone-API-Token') || '';
 
     if (!apiToken) {
       return c.json({ error: 'kintone API token is required' }, 400);
     }
 
-    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, c.env.KINTONE_APP_ID);
+    const kintoneAppId = appId || c.env.KINTONE_APP_ID;
+    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, kintoneAppId);
     const result = await kintone.getRecord(apiToken, recordId);
 
     if (c.req.header('HX-Request')) {
@@ -129,7 +131,7 @@ api.get('/records/:id', authMiddleware, async (c) => {
 
 /**
  * レコード作成
- * POST /api/records
+ * POST /api/records?app_id=xxx
  */
 api.post('/records', authMiddleware, async (c) => {
   try {
@@ -138,7 +140,9 @@ api.post('/records', authMiddleware, async (c) => {
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
+    const appId = c.req.query('app_id');
     const apiToken = c.req.header('X-Kintone-API-Token') || '';
+
     if (!apiToken) {
       return c.json({ error: 'kintone API token is required' }, 400);
     }
@@ -150,7 +154,8 @@ api.post('/records', authMiddleware, async (c) => {
       return c.json({ error: 'Record data is required' }, 400);
     }
 
-    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, c.env.KINTONE_APP_ID);
+    const kintoneAppId = appId || c.env.KINTONE_APP_ID;
+    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, kintoneAppId);
     const result = await kintone.createRecord(apiToken, record);
 
     return c.json(result, 201);
@@ -163,7 +168,7 @@ api.post('/records', authMiddleware, async (c) => {
 
 /**
  * レコード更新
- * PUT /api/records/:id
+ * PUT /api/records/:id?app_id=xxx
  */
 api.put('/records/:id', authMiddleware, async (c) => {
   try {
@@ -173,6 +178,7 @@ api.put('/records/:id', authMiddleware, async (c) => {
     }
 
     const recordId = c.req.param('id');
+    const appId = c.req.query('app_id');
     const apiToken = c.req.header('X-Kintone-API-Token') || '';
 
     if (!apiToken) {
@@ -187,7 +193,8 @@ api.put('/records/:id', authMiddleware, async (c) => {
       return c.json({ error: 'Record data is required' }, 400);
     }
 
-    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, c.env.KINTONE_APP_ID);
+    const kintoneAppId = appId || c.env.KINTONE_APP_ID;
+    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, kintoneAppId);
     const result = await kintone.updateRecord(apiToken, recordId, record, revision);
 
     return c.json(result);
@@ -200,7 +207,7 @@ api.put('/records/:id', authMiddleware, async (c) => {
 
 /**
  * レコード削除
- * DELETE /api/records
+ * DELETE /api/records?app_id=xxx
  */
 api.delete('/records', authMiddleware, async (c) => {
   try {
@@ -209,7 +216,9 @@ api.delete('/records', authMiddleware, async (c) => {
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
+    const appId = c.req.query('app_id');
     const apiToken = c.req.header('X-Kintone-API-Token') || '';
+
     if (!apiToken) {
       return c.json({ error: 'kintone API token is required' }, 400);
     }
@@ -221,7 +230,8 @@ api.delete('/records', authMiddleware, async (c) => {
       return c.json({ error: 'Record IDs array is required' }, 400);
     }
 
-    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, c.env.KINTONE_APP_ID);
+    const kintoneAppId = appId || c.env.KINTONE_APP_ID;
+    const kintone = new KintoneService(c.env.KINTONE_DOMAIN, kintoneAppId);
     const result = await kintone.deleteRecords(apiToken, recordIds);
 
     return c.json(result);

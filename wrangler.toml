@@ -2,6 +2,10 @@ name = "xintone"
 main = "src/index.ts"
 compatibility_date = "2024-05-01"
 
+# 静的アセット配信
+[site]
+bucket = "./public"
+
 [vars]
 # 環境変数は wrangler secret put コマンドで設定するか、
 # .dev.vars ファイルに記載してください
@@ -9,11 +13,8 @@ compatibility_date = "2024-05-01"
 # 必要な環境変数:
 # - SUPABASE_URL
 # - SUPABASE_ANON_KEY
-# - KINTONE_DOMAIN
-# - KINTONE_APP_ID
-
-[build]
-command = "npx tsc"
+# - KINTONE_DOMAIN (デフォルトのドメイン、アプリごとに上書き可能)
+# - KINTONE_APP_ID (デフォルトのアプリID、アプリごとに上書き可能)
 
 [[kv_namespaces]]
 binding = "CACHE"

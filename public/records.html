@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>レコード一覧 - xintone</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <!-- ヘッダー -->
+  <div class="header">
+    <div class="header-content">
+      <h1>xintone</h1>
+      <div class="header-nav">
+        <a href="/apps.html" class="btn btn-sm btn-secondary">← アプリ一覧</a>
+        <div class="user-info">
+          <span class="user-email" id="user-email"></span>
+          <button class="btn btn-sm btn-secondary" onclick="logout()">ログアウト</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- アプリ情報 -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title" id="app-name">読み込み中...</h2>
+          <p class="text-muted" id="app-description"></p>
+        </div>
+        <div class="flex-gap">
+          <button id="add-record-btn" class="btn btn-success btn-sm" onclick="showRecordModal()" style="display: none;">
+            ➕ 新規レコード
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="loadRecords()">
+            🔄 更新
+          </button>
+        </div>
+      </div>
+
+      <div id="permissions-info" class="mb-2"></div>
+
+      <!-- レコード一覧 -->
+      <div id="records-container">
+        <div class="loading">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- レコード編集モーダル -->
+  <div id="record-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-title">レコード編集</h3>
+        <button class="modal-close" onclick="closeRecordModal()">✕</button>
+      </div>
+      <div id="modal-body">
+        <!-- フォームがここに表示されます -->
+      </div>
+    </div>
+  </div>
+
+  <script src="/common.js"></script>
+  <script>
+    let currentAppId = null;
+    let currentApiToken = null;
+    let currentApp = null;
+    let currentAccess = null;
+    let records = [];
+
+    // ページ読み込み時の初期化
+    window.addEventListener('DOMContentLoaded', async () => {
+      initSupabase();
+
+      // ログインチェック
+      const session = await checkSession();
+      if (!session) {
+        window.location.href = '/';
+        return;
+      }
+
+      // セッションストレージからアプリIDとトークンを取得
+      currentAppId = sessionStorage.getItem('currentAppId');
+      currentApiToken = sessionStorage.getItem('currentApiToken');
+
+      if (!currentAppId || !currentApiToken) {
+        alert('アプリが選択されていません');
+        window.location.href = '/apps.html';
+        return;
+      }
+
+      // ユーザー情報表示
+      document.getElementById('user-email').textContent = currentUser.email;
+
+      // アプリ情報とレコードを読み込む
+      await loadAppInfo();
+      await loadRecords();
+    });
+
+    // アプリ情報を読み込む
+    async function loadAppInfo() {
+      try {
+        // アプリ情報を取得
+        const { data: appData, error: appError } = await supabaseClient
+          .from('kintone_apps')
+          .select('*')
+          .eq('id', currentAppId)
+          .single();
+
+        if (appError) throw appError;
+        currentApp = appData;
+
+        // アクセス権限を取得
+        const { data: accessData, error: accessError } = await supabaseClient
+          .from('user_app_access')
+          .select('*')
+          .eq('app_id', currentAppId)
+          .eq('user_id', currentUser.id)
+          .single();
+
+        if (accessError) throw accessError;
+        currentAccess = accessData;
+
+        // アプリ情報を表示
+        document.getElementById('app-name').textContent = currentApp.name;
+        document.getElementById('app-description').textContent = currentApp.description || '';
+
+        // 権限情報を表示
+        const permissions = [];
+        if (currentAccess.can_read) permissions.push('参照');
+        if (currentAccess.can_write) permissions.push('編集');
+        if (currentAccess.can_delete) permissions.push('削除');
+
+        document.getElementById('permissions-info').innerHTML = `
+          <div style="display: flex; gap: 10px;">
+            ${permissions.map(p => `<span class="badge badge-success">${p}</span>`).join('')}
+          </div>
+        `;
+
+        // 新規作成ボタンの表示制御
+        if (currentAccess.can_write) {
+          document.getElementById('add-record-btn').style.display = 'inline-block';
+        }
+      } catch (error) {
+        console.error('Error loading app info:', error);
+        alert('アプリ情報の読み込みに失敗しました');
+        window.location.href = '/apps.html';
+      }
+    }
+
+    // レコード一覧を読み込む
+    async function loadRecords() {
+      try {
+        showLoading('records-container');
+
+        const response = await fetch('/api/records?app_id=' + currentAppId, {
+          method: 'GET',
+          headers: getAuthHeaders(currentApiToken),
+        });
+
+        if (!response.ok) {
+          throw new Error('レコードの取得に失敗しました');
+        }
+
+        const data = await response.json();
+        records = data.records || [];
+
+        renderRecords();
+      } catch (error) {
+        console.error('Error loading records:', error);
+        showError('records-container', 'レコードの読み込みに失敗しました: ' + error.message);
+      }
+    }
+
+    // レコード一覧を表示
+    function renderRecords() {
+      const container = document.getElementById('records-container');
+
+      if (records.length === 0) {
+        container.innerHTML = `
+          <div class="text-center text-muted" style="padding: 40px;">
+            <p>レコードがありません</p>
+          </div>
+        `;
+        return;
+      }
+
+      // テーブル形式で表示
+      const fields = Object.keys(records[0]).filter(key => key !== '$id' && key !== '$revision');
+
+      const html = `
+        <div style="overflow-x: auto;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>レコード番号</th>
+                ${fields.slice(0, 5).map(field => `<th>${field}</th>`).join('')}
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${records.map(record => {
+                const recordId = record.$id?.value || record.レコード番号?.value || '';
+                return `
+                  <tr>
+                    <td>${recordId}</td>
+                    ${fields.slice(0, 5).map(field => {
+                      const value = record[field]?.value;
+                      const displayValue = Array.isArray(value) ? value.join(', ') : (value || '-');
+                      return `<td>${String(displayValue).substring(0, 50)}</td>`;
+                    }).join('')}
+                    <td>
+                      <div class="flex-gap">
+                        <button class="btn btn-sm btn-primary" onclick="viewRecord('${recordId}')">詳細</button>
+                        ${currentAccess.can_write ? `
+                          <button class="btn btn-sm btn-secondary" onclick="editRecord('${recordId}')">編集</button>
+                        ` : ''}
+                        ${currentAccess.can_delete ? `
+                          <button class="btn btn-sm btn-danger" onclick="deleteRecord('${recordId}')">削除</button>
+                        ` : ''}
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-2 text-muted text-center">
+          合計 ${records.length} 件
+        </div>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    // レコード詳細を表示
+    function viewRecord(recordId) {
+      const record = records.find(r => (r.$id?.value || r.レコード番号?.value) === recordId);
+      if (!record) return;
+
+      const fields = Object.keys(record).filter(key => !key.startsWith('$'));
+
+      const html = `
+        <div style="max-height: 60vh; overflow-y: auto;">
+          ${fields.map(field => {
+            const value = record[field]?.value;
+            const displayValue = typeof value === 'object' ? JSON.stringify(value, null, 2) : value;
+            return `
+              <div class="form-group">
+                <label class="form-label">${field}</label>
+                <div style="padding: 10px; background: var(--light-bg); border-radius: 4px;">
+                  <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word;">${displayValue || '-'}</pre>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        <div class="mt-2">
+          <button class="btn btn-secondary" onclick="closeRecordModal()">閉じる</button>
+        </div>
+      `;
+
+      document.getElementById('modal-title').textContent = 'レコード詳細';
+      document.getElementById('modal-body').innerHTML = html;
+      document.getElementById('record-modal').classList.add('active');
+    }
+
+    // レコード編集
+    function editRecord(recordId) {
+      alert('レコード編集機能は開発中です');
+      // TODO: 実装
+    }
+
+    // レコード削除
+    async function deleteRecord(recordId) {
+      if (!confirm('このレコードを削除しますか？')) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/records', {
+          method: 'DELETE',
+          headers: getAuthHeaders(currentApiToken),
+          body: JSON.stringify({ ids: [recordId] }),
+        });
+
+        if (!response.ok) {
+          throw new Error('削除に失敗しました');
+        }
+
+        alert('レコードを削除しました');
+        await loadRecords();
+      } catch (error) {
+        console.error('Error deleting record:', error);
+        alert('削除に失敗しました: ' + error.message);
+      }
+    }
+
+    // 新規レコードモーダル表示
+    function showRecordModal() {
+      alert('新規レコード作成機能は開発中です');
+      // TODO: 実装
+    }
+
+    // モーダルを閉じる
+    function closeRecordModal() {
+      document.getElementById('record-modal').classList.remove('active');
+    }
+
+    // モーダル外クリックで閉じる
+    document.getElementById('record-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'record-modal') {
+        closeRecordModal();
+      }
+    });
+  </script>
+</body>
+</html>
