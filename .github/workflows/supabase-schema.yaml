@@ -1,0 +1,39 @@
+name: Deploy Supabase Schema
+
+on:
+  # schema.sqlが変更されたときに自動実行
+  push:
+    branches:
+      - main
+    paths:
+      - 'database/schema.sql'
+
+  # 手動実行も可能
+  workflow_dispatch:
+
+jobs:
+  deploy-schema:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Execute schema.sql
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "Error: SUPABASE_DB_URL secret is not set"
+            exit 1
+          fi
+
+          echo "Executing database/schema.sql..."
+          supabase db execute --db-url "$SUPABASE_DB_URL" --file database/schema.sql
+
+          echo "Schema deployment completed successfully!"
