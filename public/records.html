@@ -156,7 +156,7 @@
       try {
         showLoading('records-container');
 
-        const response = await fetch('/api/records?app_id=' + currentAppId, {
+        const response = await fetch(`/api/records?app_id=${currentAppId}`, {
           method: 'GET',
           headers: getAuthHeaders(currentApiToken),
         });
@@ -171,7 +171,7 @@
         renderRecords();
       } catch (error) {
         console.error('Error loading records:', error);
-        showError('records-container', 'レコードの読み込みに失敗しました: ' + error.message);
+        showError('records-container', `レコードの読み込みに失敗しました: ${error.message}`);
       }
     }
 
@@ -238,7 +238,7 @@
     }
 
     // レコード詳細を表示
-    function viewRecord(recordId) {
+    function _viewRecord(recordId) {
       const record = records.find(r => (r.$id?.value || r.レコード番号?.value) === recordId);
       if (!record) return;
 
@@ -270,13 +270,13 @@
     }
 
     // レコード編集
-    function editRecord(recordId) {
+    function _editRecord(_recordId) {
       alert('レコード編集機能は開発中です');
       // TODO: 実装
     }
 
     // レコード削除
-    async function deleteRecord(recordId) {
+    async function _deleteRecord(recordId) {
       if (!confirm('このレコードを削除しますか？')) {
         return;
       }
@@ -296,12 +296,12 @@
         await loadRecords();
       } catch (error) {
         console.error('Error deleting record:', error);
-        alert('削除に失敗しました: ' + error.message);
+        alert(`削除に失敗しました: ${error.message}`);
       }
     }
 
     // 新規レコードモーダル表示
-    function showRecordModal() {
+    function _showRecordModal() {
       alert('新規レコード作成機能は開発中です');
       // TODO: 実装
     }

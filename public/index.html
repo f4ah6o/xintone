@@ -136,14 +136,14 @@
     }
 
     // サインアップフォーム表示
-    function showSignupForm() {
+    function _showSignupForm() {
       document.getElementById('login-form').style.display = 'none';
       document.getElementById('signup-form').style.display = 'block';
       clearError();
     }
 
     // ログイン処理
-    async function handleLogin(event) {
+    async function _handleLogin(event) {
       event.preventDefault();
       clearError();
 
@@ -154,12 +154,12 @@
         await login(email, password);
         window.location.href = '/apps.html';
       } catch (error) {
-        showErrorMessage('ログインに失敗しました: ' + error.message);
+        showErrorMessage(`ログインに失敗しました: ${error.message}`);
       }
     }
 
     // サインアップ処理
-    async function handleSignup(event) {
+    async function _handleSignup(event) {
       event.preventDefault();
       clearError();
 
@@ -191,7 +191,7 @@
           showLoginForm();
         }, 3000);
       } catch (error) {
-        showErrorMessage('登録に失敗しました: ' + error.message);
+        showErrorMessage(`登録に失敗しました: ${error.message}`);
       }
     }
 
