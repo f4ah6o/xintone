@@ -1,0 +1,10 @@
+# Supabase 設定
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-here
+
+# kintone 設定
+KINTONE_DOMAIN=your-domain.cybozu.com
+KINTONE_APP_ID=1
+
+# オプション: KV Namespace ID (wrangler.toml で設定)
+# CACHE_ID=your-kv-namespace-id

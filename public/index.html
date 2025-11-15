@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>xintone - kintone + Supabase + htmx</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .auth-section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 6px;
+    }
+
+    .auth-form {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    input {
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    input[type="email"], input[type="password"] {
+      flex: 1;
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    button.secondary {
+      background: #6c757d;
+    }
+
+    button.secondary:hover {
+      background: #545b62;
+    }
+
+    .user-info {
+      padding: 15px;
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .records-section {
+      display: none;
+    }
+
+    .record-list {
+      margin-top: 20px;
+    }
+
+    .record-item {
+      padding: 15px;
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    .record-item:hover {
+      background: #e9ecef;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+    }
+
+    .error {
+      padding: 15px;
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      border-radius: 4px;
+      color: #721c24;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>xintone</h1>
+    <p class="subtitle">kintone + Supabase + Cloudflare Workers + htmx + Hono</p>
+
+    <!-- 認証セクション -->
+    <div class="auth-section">
+      <h2>認証</h2>
+      <div id="login-form">
+        <div class="auth-form">
+          <input type="email" id="email" placeholder="メールアドレス" required>
+          <input type="password" id="password" placeholder="パスワード" required>
+          <button onclick="handleLogin()">ログイン</button>
+          <button class="secondary" onclick="handleSignup()">サインアップ</button>
+        </div>
+      </div>
+      <div id="user-info" class="user-info">
+        <p>ログイン中: <span id="user-email"></span></p>
+        <button class="secondary" onclick="handleLogout()">ログアウト</button>
+      </div>
+    </div>
+
+    <!-- レコード一覧セクション -->
+    <div id="records-section" class="records-section">
+      <h2>kintone レコード</h2>
+      <button
+        hx-get="/api/records"
+        hx-target="#record-list"
+        hx-swap="innerHTML"
+        onclick="addAuthHeader(this)">
+        レコード取得
+      </button>
+
+      <div id="record-list" class="record-list">
+        <!-- レコード一覧がここに表示されます -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Supabase クライアント初期化
+    // 実際の値は環境変数から取得してください
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+    let supabaseClient;
+    let currentToken = null;
+
+    // Supabase クライアントを初期化
+    if (SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
+      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      checkSession();
+    }
+
+    // セッションチェック
+    async function checkSession() {
+      if (!supabaseClient) return;
+
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        currentToken = session.access_token;
+        showUserInfo(session.user);
+      }
+    }
+
+    // ログイン処理
+    async function handleLogin() {
+      if (!supabaseClient) {
+        alert('Supabaseの設定が必要です');
+        return;
+      }
+
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        alert('ログインエラー: ' + error.message);
+      } else {
+        currentToken = data.session.access_token;
+        showUserInfo(data.user);
+      }
+    }
+
+    // サインアップ処理
+    async function handleSignup() {
+      if (!supabaseClient) {
+        alert('Supabaseの設定が必要です');
+        return;
+      }
+
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      const { data, error } = await supabaseClient.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) {
+        alert('サインアップエラー: ' + error.message);
+      } else {
+        alert('サインアップ成功! メールを確認してください。');
+      }
+    }
+
+    // ログアウト処理
+    async function handleLogout() {
+      if (!supabaseClient) return;
+
+      await supabaseClient.auth.signOut();
+      currentToken = null;
+      hideUserInfo();
+    }
+
+    // ユーザー情報表示
+    function showUserInfo(user) {
+      document.getElementById('login-form').style.display = 'none';
+      document.getElementById('user-info').style.display = 'block';
+      document.getElementById('user-email').textContent = user.email;
+      document.getElementById('records-section').style.display = 'block';
+    }
+
+    // ユーザー情報非表示
+    function hideUserInfo() {
+      document.getElementById('login-form').style.display = 'block';
+      document.getElementById('user-info').style.display = 'none';
+      document.getElementById('records-section').style.display = 'none';
+    }
+
+    // htmx リクエストに認証ヘッダーを追加
+    function addAuthHeader(element) {
+      if (currentToken) {
+        element.setAttribute('hx-headers', JSON.stringify({
+          'Authorization': 'Bearer ' + currentToken
+        }));
+      }
+    }
+
+    // htmx のグローバル設定
+    document.body.addEventListener('htmx:configRequest', (event) => {
+      if (currentToken) {
+        event.detail.headers['Authorization'] = 'Bearer ' + currentToken;
+      }
+    });
+  </script>
+</body>
+</html>
