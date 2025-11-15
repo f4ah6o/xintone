@@ -5,6 +5,8 @@ export interface Env {
   KINTONE_DOMAIN: string;
   KINTONE_APP_ID: string;
   CACHE?: KVNamespace;
+  __STATIC_CONTENT?: KVNamespace;
+  __STATIC_CONTENT_MANIFEST?: string;
 }
 
 // kintone レコード型

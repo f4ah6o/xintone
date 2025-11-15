@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { serveStatic } from 'hono/cloudflare-workers';
+import manifestJSON from '__STATIC_CONTENT_MANIFEST';
 import { authMiddleware, optionalAuthMiddleware } from './middleware/auth';
 import { adminMiddleware } from './middleware/admin';
 import { KintoneService } from './services/kintone';
@@ -10,6 +12,7 @@ type Variables = {
   user?: AuthUser;
 };
 
+const manifest = JSON.parse(manifestJSON);
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 // ミドルウェア
@@ -244,5 +247,8 @@ api.delete('/records', authMiddleware, async (c) => {
 
 // API ルートをマウント
 app.route('/api', api);
+
+// 静的アセットは KV から配信
+app.use('*', serveStatic({ root: './public', manifest }));
 
 export default app;
